@@ -123,7 +123,8 @@ function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;'
 function tarjeta(p, { duda = false, cita = false } = {}) {
   const el = document.createElement('div'); el.className = 'c'; el.dataset.id = p.i;
   // ❤ 94 = le gusta mas que el 94% de todos los posts (lo mismo que en las paginas de la PC)
-  const g = p.q != null ? '❤ ' + Math.round(p.q * 100) : p.g != null ? '❤ ~' + Math.round(p.g * 100) : '';
+  // y el % = probabilidad de que la guardes
+  const g = [p.q != null ? '❤ ' + Math.round(p.q * 100) : '', p.g != null ? Math.round(p.g * 100) + '% tu estilo' : ''].filter(Boolean).join(' · ');
   el.innerHTML = `
     <a class="im" href="${esc(p.l)}" target="_blank" rel="noopener"><img loading="lazy" referrerpolicy="no-referrer" src="${esc(p.p)}" alt=""></a>
     <div class="tx">${esc(p.t)}</div>
