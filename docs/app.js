@@ -158,7 +158,8 @@ const libre = p => !p.h && !bajadas[p.i] && !vistos[p.i];
 const V = {
   async parati(c) {
     D.parati = D.parati || await json('data/para_ti.json');
-    const seg = conG(D.parati.seguros.filter(libre)).sort((a, b) => b.g - a.g), dud = D.parati.dudas.filter(libre);
+    const seg = conG(D.parati.seguros.filter(libre)).sort((a, b) => b.g - a.g);
+    const dud = conG(D.parati.dudas.filter(libre)).sort((a, b) => Math.abs(a.g - 0.5) - Math.abs(b.g - 0.5));
     const lista = []; let i = 0, j = 0;
     while (lista.length < 1200 && (i < seg.length || j < dud.length)) {
       for (let k = 0; k < 3 && i < seg.length; k++) lista.push({ p: seg[i++] });
@@ -237,7 +238,7 @@ async function ir(v) {
   try { await V[v](c); } catch (e) { c.innerHTML = `<p class="cargando">No se pudo cargar (${esc(e.message)}).</p>`; }
 }
 document.querySelectorAll('#tabs button').forEach(b => (b.onclick = () => ir(b.dataset.v)));
-$('#nuevo').href = `https://github.com/${repo.owner}/${repo.name}/actions/workflows/publicar.yml`;
+$('#nuevo').href = `https://github.com/${repo.owner}/${repo.name}/actions/workflows/mensual.yml`;
 cargarGusto().then(() => ir('parati'));
 revisarEntreno();
 { const antes = Object.keys(vistos).length + Object.keys(bajadas).length;
