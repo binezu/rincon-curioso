@@ -157,7 +157,7 @@ function menuTengo(x, y, p, el) {
     if (ya) { tengo[p.i] = 0; ls.set('tengo', tengo); sincronizar(true); aviso('Listo, ya no está marcada'); el.style.opacity = ''; return; }
     tengo[p.i] = Math.floor(Date.now() / 1000); ls.set('tengo', tengo);
     const b = $('.bj', el); b.textContent = '✓ ya la tienes'; b.className = 'ok'; b.disabled = true; el.style.opacity = '.45';
-    aviso('✓ Marcada como “ya la tengo”: no vuelve a salir y el modelo aprende que sí te gusta ese tipo');
+    aviso('✓ Marcada como “ya la tengo”: no vuelve a salir (el modelo la ignora)');
     sincronizar(true);
   };
   setTimeout(() => addEventListener('scroll', cerrar, { once: true }), 50);

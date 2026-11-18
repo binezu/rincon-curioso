@@ -56,12 +56,10 @@ def main():
         if lab.get(i) != 'hoy':
             lab[i] = 'baja'
         y[i] = 1
-    for i in tengo:                       # ya la tenias = si te gusta ese tipo (peso normal)
-        if i not in lab:
-            lab[i] = 'tengo'; y[i] = 1
+    # "ya la tengo" se ignora al entrenar: ni si ni no (la original ya cuenta; contarla otra vez cargaria el modelo hacia ese tipo)
     for i, t in vis.items():
         # si no la apartaste porque ya tenias una casi igual, NO cuenta como "no me gusta"
-        if i not in baj and i not in lab and i not in ya_tienes and ahora - t > VISTO_MIN * 60:
+        if i not in baj and i not in lab and i not in ya_tienes and i not in tengo and ahora - t > VISTO_MIN * 60:
             lab[i] = 'visto'; y[i] = 0
     L = [i for i in lab if i in pos]
     H = [i for i in L if lab[i] == 'hist']
