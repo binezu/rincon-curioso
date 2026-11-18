@@ -87,9 +87,13 @@ function apartar(btn, p) {
 // ---------------------------------------------------------------- gusto actualizado por el reentreno en la nube
 let G = null;
 async function cargarGusto() {
-  try { G = await json('data/gusto.json'); } catch (e) { G = {}; }
+  try { G = await json('data/gusto.json'); } catch (e) { G = { g: {}, q: {}, casi_igual: [] }; }
+  G.casi = new Set(G.casi_igual || []);
 }
-const conG = ps => { if (G) for (const p of ps) if (G[p.i] != null) p.g = G[p.i]; return ps; };
+const conG = ps => {
+  if (G) for (const p of ps) { if (G.g[p.i] != null) p.g = G.g[p.i]; if (G.q[p.i] != null) p.q = G.q[p.i]; }
+  return ps;
+};
 
 // ---------------------------------------------------------------- aviso de reentreno (GitHub Actions)
 let corria = false;
@@ -116,7 +120,8 @@ setInterval(revisarEntreno, ls.get('token', '') ? 30000 : 120000);
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function tarjeta(p, { duda = false, cita = false } = {}) {
   const el = document.createElement('div'); el.className = 'c'; el.dataset.id = p.i;
-  const g = p.g != null ? Math.round(p.g * 100) + '% tu estilo' : '';
+  // ❤ 94 = le gusta mas que el 94% de todos los posts (lo mismo que en las paginas de la PC)
+  const g = p.q != null ? '❤ ' + Math.round(p.q * 100) : p.g != null ? '❤ ~' + Math.round(p.g * 100) : '';
   el.innerHTML = `
     <a class="im" href="${esc(p.l)}" target="_blank" rel="noopener"><img loading="lazy" referrerpolicy="no-referrer" src="${esc(p.p)}" alt=""></a>
     <div class="tx">${esc(p.t)}</div>
@@ -152,7 +157,7 @@ function paginado(cont, lista, opciones = {}) {
   }
   pintar();
 }
-const libre = p => !p.h && !bajadas[p.i] && !vistos[p.i];
+const libre = p => !p.h && !bajadas[p.i] && !vistos[p.i] && !(G && G.casi.has(p.i));
 
 // ---------------------------------------------------------------- vistas
 const V = {
@@ -182,7 +187,7 @@ const V = {
       return `<tr class="mes" data-m="${m.m}"><td><b>${m.m}</b>${m.robot ? ' <span class="tag nuevo">nuevo</span>' : ''}</td>
         <td>${m.h100}/${m.n100}<div class="bar"><i style="width:${pc}%"></i></div></td><td>${m.estilo}</td></tr>`;
     }).join('');
-    c.innerHTML = `<p class="info">Cuántos tienes de los 100 más votados de cada mes y cuántos “muy tu estilo” (≥70%) te faltan. Toca un mes.</p>
+    c.innerHTML = `<p class="info">Cuántos tienes de los 100 más votados de cada mes y cuántos “muy tu estilo” (❤ 90 o más) te faltan. Toca un mes.</p>
       <table><tr><th>Mes</th><th>Tienes (top 100)</th><th>Muy tu estilo</th></tr>${filas}</table>`;
     c.querySelectorAll('tr.mes').forEach(tr => (tr.onclick = () => abrirMes(tr.dataset.m)));
   },
