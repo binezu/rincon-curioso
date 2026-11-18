@@ -13,6 +13,8 @@ h1 img { width: 28px; height: 28px; border-radius: 7px; }
 nav { display: flex; gap: 2px; overflow-x: auto; }
 nav button { flex: 1 0 auto; background: none; border: 0; color: #fff; opacity: .75; padding: 8px 10px 10px; font: inherit; font-weight: 600; border-bottom: 3px solid transparent; }
 nav button.on { opacity: 1; border-bottom-color: #fff; }
+nav a.nuevo { flex: 1 0 auto; color: #fff; opacity: .75; padding: 8px 10px 10px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.aviso { cursor: pointer; }
 main { max-width: 1100px; margin: 0 auto; padding: 12px; }
 .info { color: var(--sub); font-size: 13px; margin: 2px 0 10px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }

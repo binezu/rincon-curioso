@@ -77,30 +77,40 @@ function marcarVistos(ids) {
   sincronizar(true);
 }
 
-// ---------------------------------------------------------------- descargar
-const esImagen = u => /^https:\/\/(i\.redd\.it|i\.imgur\.com)\/.+\.(jpe?g|png|gif|webp)$/i.test(u);
-async function bajar(btn, p) {
-  const url = esImagen(p.u) ? p.u : p.p;
-  btn.disabled = true; btn.textContent = 'bajando…';
+// ---------------------------------------------------------------- apartar (la PC la baja en tamaño completo al sincronizar)
+function apartar(btn, p) {
   bajadas[p.i] = { t: Math.floor(Date.now() / 1000), m: p.m }; ls.set('bajadas', bajadas);
-  let ok = false;
-  try {
-    const r = await fetch(url, { referrerPolicy: 'no-referrer' });
-    if (r.ok) {
-      const blob = await r.blob();
-      const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-      const nombre = (p.t.replace(/[\\/:*?"<>|]+/g, '').slice(0, 90).trim() || p.i) + '.' + ext;
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
-      ok = true;
-    }
-  } catch (e) {}
-  if (!ok) window.open(url, '_blank', 'noopener');
-  btn.textContent = ok ? '✓ en tu cel' : '✓ apartada'; btn.className = 'ok';
-  btn.title = ok ? '' : 'Se abrió la imagen: mantén presionado para guardarla. La PC la baja en tamaño completo al sincronizar.';
-  btn.closest('.c').dataset.bajada = 1;
+  btn.textContent = '⭐ apartada'; btn.className = 'ok'; btn.disabled = true;
   sincronizar(true);
 }
+
+// ---------------------------------------------------------------- gusto actualizado por el reentreno en la nube
+let G = null;
+async function cargarGusto() {
+  try { G = await json('data/gusto.json'); } catch (e) { G = {}; }
+}
+const conG = ps => { if (G) for (const p of ps) if (G[p.i] != null) p.g = G[p.i]; return ps; };
+
+// ---------------------------------------------------------------- aviso de reentreno (GitHub Actions)
+let corria = false;
+async function revisarEntreno() {
+  if (!repo.owner || document.hidden) return;
+  try {
+    const h = { Accept: 'application/vnd.github+json' }; const t = ls.get('token', ''); if (t) h.Authorization = 'Bearer ' + t;
+    const r = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/actions/workflows/publicar.yml/runs?per_page=1`, { headers: h, cache: 'no-store' });
+    if (!r.ok) return;
+    const run = (await r.json()).workflow_runs?.[0];
+    const activo = run && run.status !== 'completed';
+    const a = $('#aviso');
+    if (activo) { a.textContent = '⏳ Reentrenando el modelo con lo que viste… (3–5 min)'; a.hidden = false; a.onclick = null; }
+    else if (corria && run.conclusion === 'success') {
+      a.textContent = '✓ Modelo actualizado — toca aquí para ver las nuevas'; a.hidden = false;
+      a.onclick = () => { a.hidden = true; D.parati = D.comentar = null; D.meses = {}; cargarGusto().then(() => ir($('#tabs .on').dataset.v)); };
+    } else if (corria) a.hidden = true;
+    corria = activo;
+  } catch (e) {}
+}
+setInterval(revisarEntreno, ls.get('token', '') ? 30000 : 120000);
 
 // ---------------------------------------------------------------- tarjetas y paginas
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -113,10 +123,10 @@ function tarjeta(p, { duda = false, cita = false } = {}) {
     <div class="meta"><span>${esc(p.m)} · #${p.r}</span><span>▲ ${p.s.toLocaleString('es')}</span><span>${g}</span>
       ${duda ? '<span class="tag">🤔 duda</span>' : ''}${p.nuevo ? '<span class="tag nuevo">nuevo</span>' : ''}</div>
     ${(cita || duda === false) && p.o ? `<div class="ob">“${esc(p.o)}” <b>${p.on} de ${p.op}</b></div>` : ''}
-    <div class="acc"><button class="bj">⬇ bajar</button><a href="${esc(p.l)}" target="_blank" rel="noopener">reddit</a></div>`;
+    <div class="acc"><button class="bj">⭐ la quiero</button><a href="${esc(p.l)}" target="_blank" rel="noopener">reddit</a></div>`;
   const b = $('.bj', el);
-  if (bajadas[p.i]) { b.textContent = '✓ bajada'; b.className = 'ok'; b.disabled = true; }
-  else b.onclick = () => bajar(b, p);
+  if (bajadas[p.i]) { b.textContent = '⭐ apartada'; b.className = 'ok'; b.disabled = true; }
+  else b.onclick = () => apartar(b, p);
   $('img', el).onerror = function () { this.replaceWith(Object.assign(document.createElement('div'), { className: 'cargando', textContent: 'sin vista previa' })); };
   return el;
 }
@@ -148,7 +158,7 @@ const libre = p => !p.h && !bajadas[p.i] && !vistos[p.i];
 const V = {
   async parati(c) {
     D.parati = D.parati || await json('data/para_ti.json');
-    const seg = D.parati.seguros.filter(libre), dud = D.parati.dudas.filter(libre);
+    const seg = conG(D.parati.seguros.filter(libre)).sort((a, b) => b.g - a.g), dud = D.parati.dudas.filter(libre);
     const lista = []; let i = 0, j = 0;
     while (lista.length < 1200 && (i < seg.length || j < dud.length)) {
       for (let k = 0; k < 3 && i < seg.length; k++) lista.push({ p: seg[i++] });
@@ -177,7 +187,7 @@ const V = {
   },
   async bajadas(c) {
     const ids = Object.keys(bajadas).sort((a, b) => bajadas[b].t - bajadas[a].t);
-    c.innerHTML = `<p class="info">${ids.length} bajadas desde el cel. La PC las baja en tamaño completo a not_done_nuevas cuando sincronizas.</p>`;
+    c.innerHTML = `<p class="info">⭐ ${ids.length} apartadas (las más nuevas primero). La PC las baja en tamaño completo a not_done_nuevas cuando sincronizas.</p>`;
     const porMes = {};
     for (const id of ids) (porMes[bajadas[id].m] = porMes[bajadas[id].m] || []).push(id);
     const lista = [];
@@ -208,7 +218,7 @@ const V = {
 async function abrirMes(m) {
   const c = $('#vista');
   c.innerHTML = '<p class="cargando">Cargando…</p>';
-  D.meses[m] = D.meses[m] || await json(`data/meses/${m}.json`);
+  D.meses[m] = D.meses[m] || conG(await json(`data/meses/${m}.json`));
   let orden = 'gusto';
   const pintar = () => {
     const ps = D.meses[m].filter(p => !p.h && !bajadas[p.i]);
@@ -227,7 +237,9 @@ async function ir(v) {
   try { await V[v](c); } catch (e) { c.innerHTML = `<p class="cargando">No se pudo cargar (${esc(e.message)}).</p>`; }
 }
 document.querySelectorAll('#tabs button').forEach(b => (b.onclick = () => ir(b.dataset.v)));
-ir('parati');
+$('#nuevo').href = `https://github.com/${repo.owner}/${repo.name}/actions/workflows/publicar.yml`;
+cargarGusto().then(() => ir('parati'));
+revisarEntreno();
 { const antes = Object.keys(vistos).length + Object.keys(bajadas).length;
   sincronizar(true).then(() => {   // si la PC u otro aparato marco cosas, rehacer la lista
     if (Object.keys(vistos).length + Object.keys(bajadas).length !== antes && $('#tabs .on').dataset.v === 'parati') ir('parati'); }); }

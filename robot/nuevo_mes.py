@@ -186,6 +186,10 @@ def calificar(posts, mods):
     s = ((X - z['mean']) / z['scale']) @ z['coef'] + z['b'][0]
     for p, v in zip(ok, 1 / (1 + np.exp(-s))):
         p['g'] = round(float(v), 4)
+    if ok:   # huellas para el reentreno en la nube (robot/entrenar.py)
+        os.makedirs(os.path.join(AQUI, 'huellas'), exist_ok=True)
+        np.savez_compressed(os.path.join(AQUI, 'huellas', ok[0]['mes'] + '.npz'),
+                            ids=np.array([p['id'] for p in ok], dtype=object), X=X.astype(np.float16))
     return ok
 
 
@@ -274,6 +278,8 @@ def main():
     for m in meses:
         log('== %s' % m)
         top = completar(posts_mes(m))
+        for p in top:
+            p['mes'] = m
         log('  %d posts top' % len(top))
         ok = calificar(top, mods)
         log('  calificados %d' % len(ok))
