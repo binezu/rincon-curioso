@@ -14,6 +14,7 @@ const repo = (() => {
 })();
 let vistos = ls.get('vistos', {});      // id -> segundos
 let bajadas = ls.get('bajadas', {});    // id -> {t, m}
+let tengo = ls.get('tengo', {});        // id -> segundos  ("ya la tengo": no la baja la PC, no vuelve a salir)
 let pendiente = ls.get('pendiente', false);
 const D = { indice: null, parati: null, comentar: null, meses: {} };
 
@@ -48,15 +49,17 @@ function juntar(a, b) {
   for (const k in b) if (!(k in o)) o[k] = b[k];
   return o;
 }
+
 async function sincronizar(silencio = false) {
   if (!repo.owner || !repo.name) return;
   const token = ls.get('token', '');
   try {
-    for (const [nom, get, set] of [['vistos', () => vistos, v => (vistos = v)], ['bajadas', () => bajadas, v => (bajadas = v)]]) {
+    for (const [nom, get, set] of [['vistos', () => vistos, v => (vistos = v)], ['bajadas', () => bajadas, v => (bajadas = v)],
+                                   ['tengo', () => tengo, v => (tengo = v)]]) {
       for (let intento = 0; intento < 4; intento++) {
         const { data, sha } = await leerRemoto(`estado/${nom}.json`);
         const todo = juntar(get(), data); set(todo); ls.set(nom, todo);
-        if (!token || Object.keys(todo).length === Object.keys(data).length) break;
+        if (!token || Object.keys(todo).every(k => JSON.stringify(todo[k]) === JSON.stringify(data[k]))) break;
         const r = await gh(`estado/${nom}.json`, { method: 'PUT', body: JSON.stringify({
           message: `cel: ${nom}`, content: b64(JSON.stringify(todo)), ...(sha ? { sha } : {}) }) });
         if (r.ok) break;
@@ -87,8 +90,7 @@ function apartar(btn, p) {
 // ---------------------------------------------------------------- gusto actualizado por el reentreno en la nube
 let G = null;
 async function cargarGusto() {
-  try { G = await json('data/gusto.json'); } catch (e) { G = { g: {}, q: {}, casi_igual: [] }; }
-  G.casi = new Set(G.casi_igual || []);
+  try { G = await json('data/gusto.json'); } catch (e) { G = { g: {}, q: {} }; }
 }
 const conG = ps => {
   if (G) for (const p of ps) { if (G.g[p.i] != null) p.g = G.g[p.i]; if (G.q[p.i] != null) p.q = G.q[p.i]; }
@@ -132,8 +134,33 @@ function tarjeta(p, { duda = false, cita = false } = {}) {
   const b = $('.bj', el);
   if (bajadas[p.i]) { b.textContent = '⭐ apartada'; b.className = 'ok'; b.disabled = true; }
   else b.onclick = () => apartar(b, p);
+  if (tengo[p.i]) { b.textContent = '✓ ya la tienes'; b.className = 'ok'; b.disabled = true; }
+  // presionar un rato (cel) o clic derecho (PC) -> menu "ya la tengo"
+  el.addEventListener('contextmenu', e => { e.preventDefault(); menuTengo(e.clientX, e.clientY, p, el); });
+  let tm = null;
+  el.addEventListener('touchstart', e => { const t = e.touches[0]; tm = setTimeout(() => { tm = null; menuTengo(t.clientX, t.clientY, p, el); }, 550); }, { passive: true });
+  for (const ev of ['touchend', 'touchmove', 'touchcancel']) el.addEventListener(ev, () => { if (tm) clearTimeout(tm); tm = null; }, { passive: true });
   $('img', el).onerror = function () { this.replaceWith(Object.assign(document.createElement('div'), { className: 'cargando', textContent: 'sin vista previa' })); };
   return el;
+}
+function menuTengo(x, y, p, el) {
+  $('#menu')?.remove();
+  const m = document.createElement('div'); m.id = 'menu'; m.className = 'menu';
+  const ya = !!tengo[p.i];
+  m.innerHTML = `<button>${ya ? '↩ quitar “ya la tengo”' : '✓ ya la tengo'}</button><button class="sec">cancelar</button>`;
+  m.style.left = Math.min(x, innerWidth - 210) + 'px'; m.style.top = Math.min(y, innerHeight - 110) + 'px';
+  document.body.append(m);
+  const cerrar = () => { m.remove(); removeEventListener('scroll', cerrar); };
+  m.children[1].onclick = cerrar;
+  m.children[0].onclick = () => {
+    cerrar();
+    if (ya) { tengo[p.i] = 0; ls.set('tengo', tengo); sincronizar(true); aviso('Listo, ya no está marcada'); el.style.opacity = ''; return; }
+    tengo[p.i] = Math.floor(Date.now() / 1000); ls.set('tengo', tengo);
+    const b = $('.bj', el); b.textContent = '✓ ya la tienes'; b.className = 'ok'; b.disabled = true; el.style.opacity = '.45';
+    aviso('✓ Marcada como “ya la tengo”: no vuelve a salir y el modelo aprende que sí te gusta ese tipo');
+    sincronizar(true);
+  };
+  setTimeout(() => addEventListener('scroll', cerrar, { once: true }), 50);
 }
 function paginado(cont, lista, opciones = {}) {
   // lista: [{p, duda}]  -> paginas de 12; "ya las vi, siguiente" marca la pagina como vista
@@ -157,7 +184,7 @@ function paginado(cont, lista, opciones = {}) {
   }
   pintar();
 }
-const libre = p => !p.h && !bajadas[p.i] && !vistos[p.i] && !(G && G.casi.has(p.i));
+const libre = p => !p.h && !bajadas[p.i] && !vistos[p.i] && !tengo[p.i];
 
 // ---------------------------------------------------------------- vistas
 const V = {

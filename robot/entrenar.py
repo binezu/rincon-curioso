@@ -37,8 +37,9 @@ def main():
     X = np.concatenate(Xs).astype(np.float32); pos = {i: k for k, i in enumerate(ids)}
     et = lee('huellas/etiquetas.json', {})
     baj = lee('estado/bajadas.json', {}); vis = lee('estado/vistos.json', {})
+    tengo = {i for i, t in lee('estado/tengo.json', {}).items() if t}      # "ya la tengo" desde la app
     meses = [json.load(open(f, encoding='utf-8')) for f in glob.glob(os.path.join(DATA, 'meses', '*.json'))]
-    tienes = {d['i'] for ds in meses for d in ds if d['h']} | set(baj) | {i for i, (l, v) in et.items() if v}
+    tienes = {d['i'] for ds in meses for d in ds if d['h']} | set(baj) | tengo | {i for i, (l, v) in et.items() if v}
     # "casi igual" = misma foto o la misma cosa otra vez (imagen + titulo muy parecidos, ej. la misma fresa-pollo)
     E = np.hstack([X[:, :768] / (np.linalg.norm(X[:, :768], axis=1, keepdims=True) + 1e-6),
                    X[:, 768:1536] / (np.linalg.norm(X[:, 768:1536], axis=1, keepdims=True) + 1e-6)]) / np.sqrt(2)
@@ -55,6 +56,9 @@ def main():
         if lab.get(i) != 'hoy':
             lab[i] = 'baja'
         y[i] = 1
+    for i in tengo:                       # ya la tenias = si te gusta ese tipo (peso normal)
+        if i not in lab:
+            lab[i] = 'tengo'; y[i] = 1
     for i, t in vis.items():
         # si no la apartaste porque ya tenias una casi igual, NO cuenta como "no me gusta"
         if i not in baj and i not in lab and i not in ya_tienes and ahora - t > VISTO_MIN * 60:
@@ -69,29 +73,21 @@ def main():
     Q = np.argsort(np.argsort(P)) / max(len(P) - 1, 1)          # lugar entre todos (0.94 = mejor que el 94%)
     G = {i: round(float(p), 4) for i, p in zip(ids, P)}
     Gq = {i: round(float(q), 3) for i, q in zip(ids, Q)}
-    escribe('docs/data/gusto.json', {'g': G, 'q': Gq, 'casi_igual': sorted(ya_tienes)})
-    cnt = {k: sum(1 for i in L if lab[i] == k) for k in ('hist', 'hoy', 'baja', 'visto')}
-    print('entrenado con %d (%s) en %.0f s; %d escondidas por casi iguales' % (len(L), cnt, time.time() - t0, len(ya_tienes)))
+    escribe('docs/data/gusto.json', {'g': G, 'q': Gq})
+    cnt = {k: sum(1 for i in L if lab[i] == k) for k in ('hist', 'hoy', 'baja', 'tengo', 'visto')}
+    print('entrenado con %d (%s) en %.0f s; %d vistas casi iguales a algo tuyo no cuentan como "no"' % (
+        len(L), cnt, time.time() - t0, len(ya_tienes)))
 
-    # listas con el gusto nuevo (sin las casi iguales a algo que ya tienes, y sin repetir entre ellas)
+    # listas con el gusto nuevo (las casi iguales SI salen: a veces una es mas bonita; "ya la tengo" las quita)
     libres = []; ind = lee('docs/data/indice.json', {'meses': []}); est = {}
     for ds in meses:
         for d in ds:
             if d['i'] in G:
                 d['g'] = G[d['i']]; d['q'] = Gq[d['i']]
-            if not d['h'] and d['i'] not in baj and d['i'] not in ya_tienes and 'g' in d:
+            if not d['h'] and d['i'] not in baj and d['i'] not in tengo and 'g' in d:
                 libres.append(d)
                 est[d['m']] = est.get(d['m'], 0) + (d.get('q', 0) >= 0.9)
-    seg = []; Es = np.zeros((3000, E.shape[1]), np.float32); n = 0
-    for d in sorted(libres, key=lambda d: -d['g']):
-        if len(seg) >= 3000:
-            break
-        if d['i'] in pos:
-            e = E[pos[d['i']]]
-            if n and (Es[:n] @ e).max() >= CASI_IGUAL:
-                continue
-            Es[n] = e; n += 1
-        seg.append(d)
+    seg = sorted(libres, key=lambda d: -d['g'])[:3000]
     ya = {d['i'] for d in seg}
     dud = sorted((d for d in libres if d['i'] not in ya and d['i'] not in vis), key=lambda d: abs(d['g'] - 0.5))[:600]
     escribe('docs/data/para_ti.json', {'seguros': seg, 'dudas': dud})
